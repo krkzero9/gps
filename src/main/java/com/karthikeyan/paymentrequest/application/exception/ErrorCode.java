@@ -10,7 +10,9 @@ public enum ErrorCode {
     MALFORMED_REQUEST("Malformed request"),
     IDEMPOTENCY_KEY_MISSING("Missing Idempotency-Key"),
     IDEMPOTENCY_KEY_INVALID("Invalid Idempotency-Key"),
+    IDEMPOTENCY_KEY_REUSED("Idempotency-Key reused"),
     PAYMENT_REQUEST_NOT_FOUND("Payment request not found"),
+    ALREADY_SETTLED("Already settled"),
     INTERNAL_ERROR("Internal error");
 
     private final String title;

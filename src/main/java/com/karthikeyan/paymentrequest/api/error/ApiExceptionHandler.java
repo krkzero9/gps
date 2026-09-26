@@ -1,7 +1,9 @@
 package com.karthikeyan.paymentrequest.api.error;
 
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.karthikeyan.paymentrequest.api.PaymentRequestController;
 import com.karthikeyan.paymentrequest.application.exception.ErrorCode;
+import com.karthikeyan.paymentrequest.application.exception.FieldViolation;
 import com.karthikeyan.paymentrequest.application.exception.PaymentRequestException;
 import com.karthikeyan.paymentrequest.application.exception.ValidationException;
 import org.slf4j.Logger;
@@ -19,8 +21,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
-import com.fasterxml.jackson.databind.exc.MismatchedInputException;
-import com.karthikeyan.paymentrequest.application.exception.FieldViolation;
 import java.util.List;
 
 /**
@@ -83,7 +83,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return switch (code) {
             case VALIDATION_FAILED, MALFORMED_REQUEST, IDEMPOTENCY_KEY_MISSING, IDEMPOTENCY_KEY_INVALID ->
                     HttpStatus.BAD_REQUEST;
+            case IDEMPOTENCY_KEY_REUSED -> HttpStatus.UNPROCESSABLE_ENTITY;
             case PAYMENT_REQUEST_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case ALREADY_SETTLED -> HttpStatus.CONFLICT;
             case INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }

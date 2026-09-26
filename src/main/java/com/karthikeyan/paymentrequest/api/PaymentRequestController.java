@@ -1,8 +1,10 @@
 package com.karthikeyan.paymentrequest.api;
 
-import com.karthikeyan.paymentrequest.application.CreatePaymentRequestCommand;
 import com.karthikeyan.paymentrequest.api.dto.PaymentRequestResponse;
+import com.karthikeyan.paymentrequest.application.CreatePaymentRequestCommand;
+import com.karthikeyan.paymentrequest.application.CreateResult;
 import com.karthikeyan.paymentrequest.application.PaymentRequestService;
+import com.karthikeyan.paymentrequest.application.SettleCommand;
 import com.karthikeyan.paymentrequest.persistence.PaymentRequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,8 +22,9 @@ import java.util.UUID;
 @RequestMapping(PaymentRequestController.BASE_PATH)
 public class PaymentRequestController {
 
-    public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
     public static final String BASE_PATH = "/api/v1/payment-requests";
+    public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    public static final String IDEMPOTENT_REPLAYED_HEADER = "Idempotent-Replayed";
 
     private final PaymentRequestService service;
 
@@ -33,13 +36,23 @@ public class PaymentRequestController {
     public ResponseEntity<PaymentRequestResponse> create(
             @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @RequestBody CreatePaymentRequestCommand request) {
-        PaymentRequestEntity created = service.create(idempotencyKey, request);
+        CreateResult result = service.create(idempotencyKey, request);
+        PaymentRequestEntity created = result.paymentRequest();
         URI location = URI.create(BASE_PATH + "/" + created.getId());
-        return ResponseEntity.created(location).body(PaymentRequestResponse.from(created));
+        ResponseEntity.BodyBuilder response = ResponseEntity.created(location);
+        if (result.replayed()) {
+            response.header(IDEMPOTENT_REPLAYED_HEADER, "true");
+        }
+        return response.body(PaymentRequestResponse.from(created));
     }
 
     @GetMapping("/{id}")
     public PaymentRequestResponse get(@PathVariable UUID id) {
         return PaymentRequestResponse.from(service.get(id));
+    }
+
+    @PostMapping("/{id}/settle")
+    public PaymentRequestResponse settle(@PathVariable UUID id, @RequestBody SettleCommand command) {
+        return PaymentRequestResponse.from(service.settle(id, command));
     }
 }

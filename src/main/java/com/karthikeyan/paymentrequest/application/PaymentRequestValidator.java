@@ -24,6 +24,7 @@ public class PaymentRequestValidator {
     private static final String SUPPORTED_CURRENCY = "EUR";
     private static final int MAX_NAME_LENGTH = 70;
     private static final int MAX_PURPOSE_LENGTH = 140;
+    private static final int MAX_SETTLEMENT_REFERENCE_LENGTH = 64;
 
     private final BigDecimal maxAmount;
 
@@ -45,6 +46,14 @@ public class PaymentRequestValidator {
         checkAmount(request.amount(), violations);
         checkCurrency(request.currency(), violations);
         checkText("purpose", request.purpose(), MAX_PURPOSE_LENGTH, violations);
+        if (!violations.isEmpty()) {
+            throw new ValidationException(violations);
+        }
+    }
+
+    public void validate(SettleCommand command) {
+        List<FieldViolation> violations = new ArrayList<>();
+        checkText("settlementReference", command.settlementReference(), MAX_SETTLEMENT_REFERENCE_LENGTH, violations);
         if (!violations.isEmpty()) {
             throw new ValidationException(violations);
         }
