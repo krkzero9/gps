@@ -22,7 +22,6 @@ public class PaymentRequestEntity {
     private UUID id;
 
     private String idempotencyKey;
-    private String requestHash;
     private String recipientName;
     private String recipientIban;
     private BigDecimal amount;
@@ -38,11 +37,10 @@ public class PaymentRequestEntity {
 
     protected PaymentRequestEntity() {}
 
-    public PaymentRequestEntity(String idempotencyKey, String requestHash,
+    public PaymentRequestEntity(String idempotencyKey,
                                 String recipientName, String recipientIban, BigDecimal amount,
                                 String currency, String purpose, Instant createdAt) {
         this.idempotencyKey = idempotencyKey;
-        this.requestHash = requestHash;
         this.recipientName = recipientName;
         this.recipientIban = recipientIban;
         this.amount = amount;
@@ -54,7 +52,6 @@ public class PaymentRequestEntity {
 
     public UUID getId() { return id; }
     public String getIdempotencyKey() { return idempotencyKey; }
-    public String getRequestHash() { return requestHash; }
     public String getRecipientName() { return recipientName; }
     public String getRecipientIban() { return recipientIban; }
     public BigDecimal getAmount() { return amount; }

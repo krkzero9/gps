@@ -1,7 +1,6 @@
 CREATE TABLE payment_request (
                                  id                    UUID           PRIMARY KEY,
                                  idempotency_key       VARCHAR(64)    NOT NULL,
-                                 request_hash          VARCHAR(64)    NOT NULL,
                                  recipient_name        VARCHAR(70)    NOT NULL,
                                  recipient_iban        VARCHAR(34)    NOT NULL,
                                  amount                NUMERIC(19,2)  NOT NULL,
