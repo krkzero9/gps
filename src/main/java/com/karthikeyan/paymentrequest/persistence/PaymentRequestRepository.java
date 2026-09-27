@@ -10,7 +10,10 @@ import java.util.UUID;
 
 public interface PaymentRequestRepository extends JpaRepository<PaymentRequestEntity, UUID> {
 
-    Optional<PaymentRequestEntity> findByIdempotencyKey(String idempotencyKey);
+    Optional<PaymentRequestEntity> findByOwnerClientIdAndIdempotencyKey(String ownerClientId, String idempotencyKey);
+
+    /** Only the owner finds its payment request; for anyone else it looks like it doesn't exist (404). */
+    Optional<PaymentRequestEntity> findByIdAndOwnerClientId(UUID id, String ownerClientId);
 
     /**
      * Settles the payment request only if it is still OPEN, in one atomic statement.

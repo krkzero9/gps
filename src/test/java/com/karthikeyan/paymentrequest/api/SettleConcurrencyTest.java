@@ -58,7 +58,7 @@ class SettleConcurrencyTest {
         assertThat(winners).hasSize(1);                  // exactly one caller settled it
         assertThat(conflicts).isEqualTo(CALLERS - 1);    // everyone else got 409 ALREADY_SETTLED
 
-        mockMvc.perform(get("/api/v1/payment-requests/" + id))
+        mockMvc.perform(get("/api/v1/payment-requests/" + id).with(TestTokens.businessA()))
                 .andExpect(jsonPath("$.status").value("SETTLED"))
                 .andExpect(jsonPath("$.settlementReference").value(winners.get(0))); // winner's reference kept
     }
@@ -77,7 +77,8 @@ class SettleConcurrencyTest {
         assertThat(settledAtValues).containsOnly(settledAtValues.get(0)); // settled once: one settledAt for all
     }
 
-    private List<MvcResult> settleConcurrently(String id, IntFunction<String> reference) throws Exception {
+    private List<MvcResult> settleConcurrently(String id, IntFunction<String> reference)
+            throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(CALLERS);
         CountDownLatch startTogether = new CountDownLatch(1);
         try {
@@ -86,7 +87,7 @@ class SettleConcurrencyTest {
                 String body = "{\"settlementReference\": \"" + reference.apply(i) + "\"}";
                 futures.add(pool.submit(() -> {
                     startTogether.await();
-                    return mockMvc.perform(post("/api/v1/payment-requests/" + id + "/settle")
+                    return mockMvc.perform(post("/api/v1/payment-requests/" + id + "/settle").with(TestTokens.paymentEvents())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body)).andReturn();
                 }));
@@ -104,7 +105,7 @@ class SettleConcurrencyTest {
     }
 
     private String createOpenPaymentRequest() throws Exception {
-        String response = mockMvc.perform(post("/api/v1/payment-requests")
+        String response = mockMvc.perform(post("/api/v1/payment-requests").with(TestTokens.businessA())
                         .header("Idempotency-Key", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

@@ -42,31 +42,34 @@ public class PaymentRequestService {
      * </ol>
      * Without @Transactional, each repository call runs and commits in its own transaction.
      */
-    public CreateResult create(String idempotencyKey, CreatePaymentRequestCommand command) {
+    public CreateResult create(String ownerClientId, String idempotencyKey, CreatePaymentRequestCommand command) {
         validator.validateIdempotencyKey(idempotencyKey);
         validator.validate(command);
         NormalizedPaymentRequest request = NormalizedPaymentRequest.from(command);
 
-        Optional<PaymentRequestEntity> existing = repository.findByIdempotencyKey(idempotencyKey);
+        Optional<PaymentRequestEntity> existing =
+                repository.findByOwnerClientIdAndIdempotencyKey(ownerClientId, idempotencyKey);
         if (existing.isPresent()) {
             return replay(existing.get(), request);
         }
         try {
-            PaymentRequestEntity created = repository.save(newEntity(idempotencyKey, request));
+            PaymentRequestEntity created = repository.save(newEntity(ownerClientId, idempotencyKey, request));
             log.info("Created payment request {}", created.getId());
             return new CreateResult(created, false);
         } catch (DataIntegrityViolationException e) {
             // Lost a race: a request with the same key was inserted between our lookup and our insert.
             // The UNIQUE constraint stopped the duplicate; now answer like any other repeated request.
-            PaymentRequestEntity winner = repository.findByIdempotencyKey(idempotencyKey).orElseThrow(() -> e);
+            PaymentRequestEntity winner = repository.findByOwnerClientIdAndIdempotencyKey(ownerClientId, idempotencyKey)
+                    .orElseThrow(() -> e);
             log.info("Concurrent create with the same Idempotency-Key; payment request {} won", winner.getId());
             return replay(winner, request);
         }
     }
 
+    /** Returns the payment request only to its owner; any other client gets 404, as if it didn't exist. */
     @Transactional(readOnly = true)
-    public PaymentRequestEntity get(UUID id) {
-        return repository.findById(id).orElseThrow(() -> notFound(id));
+    public PaymentRequestEntity get(UUID id, String ownerClientId) {
+        return repository.findByIdAndOwnerClientId(id, ownerClientId).orElseThrow(() -> notFound(id));
     }
 
     /**
@@ -119,8 +122,10 @@ public class PaymentRequestService {
                 && existing.getPurpose().equals(request.purpose());
     }
 
-    private static PaymentRequestEntity newEntity(String idempotencyKey, NormalizedPaymentRequest request) {
+    private static PaymentRequestEntity newEntity(String ownerClientId, String idempotencyKey,
+                                                  NormalizedPaymentRequest request) {
         return new PaymentRequestEntity(
+                ownerClientId,
                 idempotencyKey,
                 request.recipientName(),
                 request.recipientIban(),

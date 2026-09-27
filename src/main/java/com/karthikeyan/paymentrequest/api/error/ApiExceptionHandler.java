@@ -15,12 +15,14 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
 import java.util.List;
 
 /**
@@ -39,6 +41,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             problem.setProperty("errors", validation.getViolations());
         }
         return problem;
+    }
+
+    /**
+     * @PreAuthorize throws this inside Spring MVC when the token lacks the required permission.
+     * Without this handler the catch-all below would turn a 403 into a 500.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    ProblemDetail handleAccessDenied(AccessDeniedException ex) {
+        return problem(ErrorCode.FORBIDDEN, "The token does not grant the permission for this operation.");
     }
 
     @ExceptionHandler(Exception.class)
@@ -86,11 +97,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             case IDEMPOTENCY_KEY_REUSED -> HttpStatus.UNPROCESSABLE_ENTITY;
             case PAYMENT_REQUEST_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case ALREADY_SETTLED -> HttpStatus.CONFLICT;
+            case UNAUTHORIZED -> HttpStatus.UNAUTHORIZED;
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }
 
-    private static ProblemDetail problem(ErrorCode code, String detail) {
+    /** Package-private so the security entry point builds 401s the same way. */
+    static ProblemDetail problem(ErrorCode code, String detail) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(statusFor(code), detail);
         problem.setTitle(code.getTitle());
         problem.setProperty("code", code.name());

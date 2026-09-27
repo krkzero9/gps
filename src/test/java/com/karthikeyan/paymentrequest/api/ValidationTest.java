@@ -111,6 +111,7 @@ class ValidationTest {
                 .andExpect(jsonPath("$.errors[0].field").value("amount"))
                 .andExpect(jsonPath("$.errors[0].code").value("INVALID_TYPE"));
     }
+
     @Test
     void rejectsMalformedJson() throws Exception {
         create("{ this is not json")
@@ -120,7 +121,7 @@ class ValidationTest {
 
     @Test
     void requiresIdempotencyKey() throws Exception {
-        mockMvc.perform(post("/api/v1/payment-requests")
+        mockMvc.perform(post("/api/v1/payment-requests").with(TestTokens.businessA())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -128,7 +129,7 @@ class ValidationTest {
     }
 
     private ResultActions create(String body) throws Exception {
-        return mockMvc.perform(post("/api/v1/payment-requests")
+        return mockMvc.perform(post("/api/v1/payment-requests").with(TestTokens.businessA())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));

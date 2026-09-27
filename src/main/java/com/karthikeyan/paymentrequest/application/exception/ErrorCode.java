@@ -13,6 +13,8 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_REUSED("Idempotency-Key reused"),
     PAYMENT_REQUEST_NOT_FOUND("Payment request not found"),
     ALREADY_SETTLED("Already settled"),
+    UNAUTHORIZED("Unauthorized"),
+    FORBIDDEN("Forbidden"),
     INTERNAL_ERROR("Internal error");
 
     private final String title;

@@ -43,7 +43,7 @@ class SettleTest {
                 .andExpect(jsonPath("$.settlementReference").value("BANK-TX-1"))
                 .andExpect(jsonPath("$.settledAt").isNotEmpty());
 
-        mockMvc.perform(get("/api/v1/payment-requests/" + id))
+        mockMvc.perform(get("/api/v1/payment-requests/" + id).with(TestTokens.businessA()))
                 .andExpect(jsonPath("$.status").value("SETTLED"));
     }
 
@@ -67,7 +67,7 @@ class SettleTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ALREADY_SETTLED"));
 
-        mockMvc.perform(get("/api/v1/payment-requests/" + id))
+        mockMvc.perform(get("/api/v1/payment-requests/" + id).with(TestTokens.businessA()))
                 .andExpect(jsonPath("$.settlementReference").value("BANK-TX-1")); // first one kept
     }
 
@@ -79,7 +79,7 @@ class SettleTest {
     }
 
     private String createOpenPaymentRequest() throws Exception {
-        String response = mockMvc.perform(post("/api/v1/payment-requests")
+        String response = mockMvc.perform(post("/api/v1/payment-requests").with(TestTokens.businessA())
                         .header("Idempotency-Key", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
@@ -89,7 +89,7 @@ class SettleTest {
     }
 
     private ResultActions settle(String id, String reference) throws Exception {
-        return mockMvc.perform(post("/api/v1/payment-requests/" + id + "/settle")
+        return mockMvc.perform(post("/api/v1/payment-requests/" + id + "/settle").with(TestTokens.paymentEvents())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"settlementReference\": \"" + reference + "\"}"));
     }

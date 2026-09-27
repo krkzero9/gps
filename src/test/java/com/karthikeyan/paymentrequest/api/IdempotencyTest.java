@@ -128,7 +128,7 @@ class IdempotencyTest {
     }
 
     private ResultActions create(String key, String body) throws Exception {
-        return mockMvc.perform(post("/api/v1/payment-requests")
+        return mockMvc.perform(post("/api/v1/payment-requests").with(TestTokens.businessA())
                 .header("Idempotency-Key", key)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));

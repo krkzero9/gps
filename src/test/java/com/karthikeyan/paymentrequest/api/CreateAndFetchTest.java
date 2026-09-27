@@ -36,7 +36,7 @@ class CreateAndFetchTest {
 
     @Test
     void createsOpenPaymentRequestAndFetchesIt() throws Exception {
-        MvcResult created = mockMvc.perform(post("/api/v1/payment-requests")
+        MvcResult created = mockMvc.perform(post("/api/v1/payment-requests").with(TestTokens.businessA())
                         .header("Idempotency-Key", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
@@ -50,7 +50,7 @@ class CreateAndFetchTest {
 
         String location = created.getResponse().getHeader("Location");
 
-        mockMvc.perform(get(location))
+        mockMvc.perform(get(location).with(TestTokens.businessA()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.recipientName").value("Acme GmbH"))
@@ -60,7 +60,7 @@ class CreateAndFetchTest {
 
     @Test
     void unknownIdReturns404() throws Exception {
-        mockMvc.perform(get("/api/v1/payment-requests/" + UUID.randomUUID()))
+        mockMvc.perform(get("/api/v1/payment-requests/" + UUID.randomUUID()).with(TestTokens.businessA()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PAYMENT_REQUEST_NOT_FOUND"));
     }

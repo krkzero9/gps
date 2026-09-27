@@ -21,6 +21,7 @@ public class PaymentRequestEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    private String ownerClientId;
     private String idempotencyKey;
     private String recipientName;
     private String recipientIban;
@@ -35,11 +36,14 @@ public class PaymentRequestEntity {
     private Instant createdAt;
     private Instant settledAt;
 
-    protected PaymentRequestEntity() {}
+    protected PaymentRequestEntity() {
+        // required by JPA
+    }
 
-    public PaymentRequestEntity(String idempotencyKey,
+    public PaymentRequestEntity(String ownerClientId, String idempotencyKey,
                                 String recipientName, String recipientIban, BigDecimal amount,
                                 String currency, String purpose, Instant createdAt) {
+        this.ownerClientId = ownerClientId;
         this.idempotencyKey = idempotencyKey;
         this.recipientName = recipientName;
         this.recipientIban = recipientIban;
@@ -51,6 +55,7 @@ public class PaymentRequestEntity {
     }
 
     public UUID getId() { return id; }
+    public String getOwnerClientId() { return ownerClientId; }
     public String getIdempotencyKey() { return idempotencyKey; }
     public String getRecipientName() { return recipientName; }
     public String getRecipientIban() { return recipientIban; }
