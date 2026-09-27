@@ -1,0 +1,1196 @@
+{
+  "info": {
+    "name": "Payment Request Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Local testing against a running app (./mvnw spring-boot:run).\n1. Create a Postman environment, select it, and add businessClientSecret and paymentEventsClientSecret as type 'secret'. The token requests store the tokens in that environment too, so this collection never contains a secret or a token.\n2. Fill businessClientId and paymentEventsClientId in the collection variables.\n3. Run folder 00 (tokens, valid ~60-90 min), then 10, then 20.\nDefault auth = business-a token; settle requests use the payment-events token."
+  },
+  "item": [
+    {
+      "name": "00 Get tokens (run first)",
+      "item": [
+        {
+          "name": "T1 Token for business-a (Write, Read)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": "https://login.microsoftonline.com/{{tenantId}}/oauth2/v2.0/token",
+            "description": "Client credentials. The secret comes from your Postman environment (type: secret), never from this file.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{businessClientId}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{businessClientSecret}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "api://{{apiClientId}}/.default"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"an environment is selected (tokens are stored there)\", () => pm.expect(pm.environment.name, \"select your environment in the top-right dropdown\").to.be.a(\"string\").and.not.empty);",
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"businessToken\", pm.response.json().access_token);",
+                  "const p = JSON.parse(atob(pm.response.json().access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));",
+                  "pm.test(\"aud is our API\", () => pm.expect(p.aud).to.eql(pm.collectionVariables.get(\"apiClientId\")));",
+                  "pm.test(\"roles Write + Read\", () => pm.expect(p.roles).to.have.members([\"PaymentRequests.Write\",\"PaymentRequests.Read\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "T2 Token for payment-events (Settle)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": "https://login.microsoftonline.com/{{tenantId}}/oauth2/v2.0/token",
+            "description": "Client credentials. The secret comes from your Postman environment (type: secret), never from this file.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{paymentEventsClientId}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{paymentEventsClientSecret}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "api://{{apiClientId}}/.default"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"an environment is selected (tokens are stored there)\", () => pm.expect(pm.environment.name, \"select your environment in the top-right dropdown\").to.be.a(\"string\").and.not.empty);",
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"paymentEventsToken\", pm.response.json().access_token);",
+                  "const p = JSON.parse(atob(pm.response.json().access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));",
+                  "pm.test(\"roles Settle\", () => pm.expect(p.roles).to.eql([\"PaymentRequests.Settle\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "T3 Token for Microsoft Graph (wrong audience, used by S3)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": "https://login.microsoftonline.com/{{tenantId}}/oauth2/v2.0/token",
+            "description": "Client credentials. The secret comes from your Postman environment (type: secret), never from this file.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{businessClientId}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{businessClientSecret}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "https://graph.microsoft.com/.default"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"an environment is selected (tokens are stored there)\", () => pm.expect(pm.environment.name, \"select your environment in the top-right dropdown\").to.be.a(\"string\").and.not.empty);",
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"otherApiToken\", pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 API with business-a / payment-events tokens",
+      "item": [
+        {
+          "name": "01 Create - happy path (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Lowercase IBAN with spaces, 49.9 and 'eur' on purpose: the response shows the normalized values. Saves the id for request 02.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"de89 3704 0044 0532 0130 00\",\n  \"amount\": 49.9,\n  \"currency\": \"eur\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set(\"id\", b.id);",
+                  "pm.test(\"amount normalized to 49.90\", () => pm.expect(b.amount).to.eql(\"49.90\"));",
+                  "pm.test(\"IBAN normalized\", () => pm.expect(b.recipientIban).to.eql(\"DE89370400440532013000\"));",
+                  "pm.test(\"Location header\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(b.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Get by id (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}",
+            "description": "Run 01 first; it stores {{id}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Get unknown id (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/00000000-0000-0000-0000-000000000000",
+            "description": "Thrown in PaymentRequestService.get -> handlePaymentRequestException."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code PAYMENT_REQUEST_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"PAYMENT_REQUEST_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Get with non-UUID id (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/abc",
+            "description": "Spring cannot convert 'abc' to UUID -> handleTypeMismatch. Controller never runs."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code MALFORMED_REQUEST\", () => pm.expect(pm.response.json().code).to.eql(\"MALFORMED_REQUEST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Create - several invalid fields (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Validator collects all errors -> ValidationException -> 'errors' array.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientIban\": \"DE00 1234\",\n  \"amount\": -5,\n  \"currency\": \"USD\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_FAILED\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_FAILED\"));",
+                  "pm.test(\"4 field errors\", () => pm.expect(pm.response.json().errors).to.have.lengthOf(4));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Create - 3 decimals rejected (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Without this check NUMERIC(19,2) would silently round to 50.00.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"DE89370400440532013000\",\n  \"amount\": 49.999,\n  \"currency\": \"EUR\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_FAILED\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_FAILED\"));",
+                  "pm.test(\"AMOUNT_TOO_MANY_DECIMALS\", () => pm.expect(pm.response.json().errors[0].code).to.eql(\"AMOUNT_TOO_MANY_DECIMALS\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Create - amount too large (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"DE89370400440532013000\",\n  \"amount\": 1000000.01,\n  \"currency\": \"EUR\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_FAILED\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_FAILED\"));",
+                  "pm.test(\"AMOUNT_TOO_LARGE\", () => pm.expect(pm.response.json().errors[0].code).to.eql(\"AMOUNT_TOO_LARGE\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 Create - malformed JSON (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Jackson fails before the controller -> HttpMessageNotReadableException -> handleHttpMessageNotReadable.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ this is not json",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code MALFORMED_REQUEST\", () => pm.expect(pm.response.json().code).to.eql(\"MALFORMED_REQUEST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 Create - amount is text (400, names the field)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Jackson cannot turn 'abc' into BigDecimal -> handleHttpMessageNotReadable names the field.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"DE89370400440532013000\",\n  \"amount\": \"abc\",\n  \"currency\": \"EUR\",\n  \"purpose\": \"Invoice\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_FAILED\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_FAILED\"));",
+                  "pm.test(\"field amount INVALID_TYPE\", () => { const e = pm.response.json().errors[0]; pm.expect(e.field).to.eql(\"amount\"); pm.expect(e.code).to.eql(\"INVALID_TYPE\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Create - missing Idempotency-Key (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Spring's header resolver throws MissingRequestHeaderException -> handleServletRequestBindingException.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"de89 3704 0044 0532 0130 00\",\n  \"amount\": 49.9,\n  \"currency\": \"eur\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code IDEMPOTENCY_KEY_MISSING\", () => pm.expect(pm.response.json().code).to.eql(\"IDEMPOTENCY_KEY_MISSING\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Create - invalid Idempotency-Key (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "not a valid key!"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Header present but fails the pattern -> validator throws PaymentRequestException.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"de89 3704 0044 0532 0130 00\",\n  \"amount\": 49.9,\n  \"currency\": \"eur\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code IDEMPOTENCY_KEY_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"IDEMPOTENCY_KEY_INVALID\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12a Same key - first call (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{fixedKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Uses a fixed key. Run 12a then 12b. Restart the app (H2 is in memory) or change fixedKey to repeat.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"de89 3704 0044 0532 0130 00\",\n  \"amount\": 49.9,\n  \"currency\": \"eur\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12b Same key, same body - replay (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{fixedKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Phase 3: same key + same content = retry -> the original payment request is returned. Restart the app or change fixedKey to repeat 12a-12c.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"de89 3704 0044 0532 0130 00\",\n  \"amount\": 49.9,\n  \"currency\": \"eur\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"replayed header\", () => pm.expect(pm.response.headers.get(\"Idempotent-Replayed\")).to.eql(\"true\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12c Same key, different amount (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{fixedKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Key reused for a different payment -> 422 instead of silently replaying the old one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"de89 3704 0044 0532 0130 00\",\n  \"amount\": 99.0,\n  \"currency\": \"eur\",\n  \"purpose\": \"Invoice 2026-0815\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"code IDEMPOTENCY_KEY_REUSED\", () => pm.expect(pm.response.json().code).to.eql(\"IDEMPOTENCY_KEY_REUSED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Wrong method DELETE (405)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}",
+            "description": "Handled by Spring's base class (ResponseEntityExceptionHandler): correct 405, no 'code' field."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 405\", () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 Wrong Content-Type (415)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "Also handled by the base class. If we did not extend it, the catch-all would turn this into 500.",
+            "body": {
+              "mode": "raw",
+              "raw": "hello",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 415\", () => pm.response.to.have.status(415));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 Settle - OPEN request (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}/settle",
+            "description": "Run 01 first (sets {{id}}). Only works once per id: run 01 again for a fresh OPEN request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementReference\": \"BANK-TX-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{paymentEventsToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"SETTLED\", () => pm.expect(pm.response.json().status).to.eql(\"SETTLED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 Settle again, same reference (200, idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}/settle",
+            "description": "A retried settle event gets the same result.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementReference\": \"BANK-TX-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{paymentEventsToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 Settle again, different reference (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}/settle",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementReference\": \"BANK-TX-2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{paymentEventsToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"code ALREADY_SETTLED\", () => pm.expect(pm.response.json().code).to.eql(\"ALREADY_SETTLED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18 Settle unknown id (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests/00000000-0000-0000-0000-000000000000/settle",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementReference\": \"BANK-TX-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{paymentEventsToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 Settle without reference (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}/settle",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{paymentEventsToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_FAILED\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_FAILED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "20 Security checks",
+      "item": [
+        {
+          "name": "S1 No token (401)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}",
+            "description": "Rejected by the filter before any controller runs; our entry point writes Problem Details."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code UNAUTHORIZED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHORIZED\"));",
+                  "pm.test(\"WWW-Authenticate: Bearer\", () => pm.expect(pm.response.headers.get(\"WWW-Authenticate\")).to.include(\"Bearer\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "S2 Garbage token (401)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not-a-jwt",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}",
+            "description": "Signature check fails."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code UNAUTHORIZED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHORIZED\"));",
+                  "pm.test(\"WWW-Authenticate: Bearer\", () => pm.expect(pm.response.headers.get(\"WWW-Authenticate\")).to.include(\"Bearer\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "S3 Real Entra token for another API (401, audience)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherApiToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}",
+            "description": "Valid signature and issuer, but aud = Microsoft Graph, so jwt.audiences rejects it. Run T3 first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code UNAUTHORIZED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHORIZED\"));",
+                  "pm.test(\"WWW-Authenticate: Bearer\", () => pm.expect(pm.response.headers.get(\"WWW-Authenticate\")).to.include(\"Bearer\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "S4 business-a tries to settle (403)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{businessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}/settle",
+            "description": "Valid token, missing the Settle role -> @PreAuthorize -> AccessDeniedException handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementReference\": \"SEC-CHECK-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code FORBIDDEN\", () => pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "S5 payment-events tries to create (403)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{paymentEventsToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payment-requests",
+            "description": "payment-events only has the Settle role.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Acme GmbH\",\n  \"recipientIban\": \"DE89370400440532013000\",\n  \"amount\": \"10.00\",\n  \"currency\": \"EUR\",\n  \"purpose\": \"Security check\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code FORBIDDEN\", () => pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "S6 payment-events tries to read (403)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{paymentEventsToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-requests/{{id}}",
+            "description": "payment-events only has the Settle role."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code FORBIDDEN\", () => pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "id",
+      "value": ""
+    },
+    {
+      "key": "fixedKey",
+      "value": "demo-duplicate-001"
+    },
+    {
+      "key": "tenantId",
+      "value": "e3f0ddb8-42ef-470c-9148-3d4e776d03c3"
+    },
+    {
+      "key": "apiClientId",
+      "value": "6bdd59a8-e2b0-463e-a39b-2e1227f83be5"
+    },
+    {
+      "key": "businessClientId",
+      "value": ""
+    },
+    {
+      "key": "paymentEventsClientId",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{businessToken}}",
+        "type": "string"
+      }
+    ]
+  }
+}
